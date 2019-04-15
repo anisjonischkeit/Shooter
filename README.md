@@ -1,7 +1,5 @@
 # Reprocessing Shooter [![Netlify Status](https://api.netlify.com/api/v1/badges/d91b0b5d-ead3-4081-a759-7880199f04ef/deploy-status)](https://app.netlify.com/sites/determined-haibt-e6bd07/deploys)
 
----
-
 ## How to
 
 ```
