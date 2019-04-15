@@ -14,8 +14,10 @@
   mkdir ./build && \
   mkdir ./build/lib && \
   mkdir build/lib/js && \
+  mkdir build/node_modules && \
   cp index.html ./build/index.html && \
   cp require_polyfill.js ./build/require_polyfill.js && \
   cp -a ./lib/js/. ./build/lib/js/ && \
+  cp -a ./node_modules/. build/node_modules && \
   echo `ls ./lib/js/`
   """
