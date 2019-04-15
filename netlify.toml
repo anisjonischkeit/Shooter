@@ -7,4 +7,4 @@
 
 [build]
   publish = "./build"
-  command = "npm install && npm run build:web && rm -rf ./build && mkdir ./build && mkdir ./build/lib && mkdir build/lib/js && cp index.html ./build/index.html && cp require_polyfill.js ./build/require_polyfill.js && cp -r ./lib/js/ ./build/lib/js/"
+  command = "npm install && npm run build:web && rm -rf ./build && mkdir ./build && mkdir ./build/lib && mkdir build/lib/js && cp index.html ./build/index.html && cp require_polyfill.js ./build/require_polyfill.js && cp -r ./lib/js/ ./build/lib/js/ && echo `cat ./build/lib/js/src/index.js`"
