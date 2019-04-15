@@ -1,13 +1,33 @@
 open Reprocessing;
 
-type state = {rotation: float};
+type keyState =
+  | Pressed
+  | Released;
+
+type keys = {
+  left: keyState,
+  right: keyState,
+  space: keyState,
+};
+
+type state = {
+  rotation: float,
+  keys,
+};
 
 let boardWidth = 600;
 
 let setup = env => {
   Env.size(~width=boardWidth, ~height=boardWidth, env);
 
-  {rotation: 0.0};
+  {
+    rotation: 0.0,
+    keys: {
+      left: Released,
+      right: Released,
+      space: Released,
+    },
+  };
 };
 
 let drawPlayer = (rotation, env) => {
@@ -69,6 +89,32 @@ let drawPlayer = (rotation, env) => {
   ();
 };
 
+let getNextRotation = (rotation, keys, env) => {
+  let speed = 2.5;
+  switch (keys.left, keys.right) {
+  | (Pressed, Released) => rotation -. speed
+  | (Released, Pressed) => rotation +. speed
+  | _ => rotation
+  };
+};
+
+let getKeyState = (key, currentState, env) =>
+  if (Env.keyPressed(key, env)) {
+    Pressed;
+  } else if (Env.keyReleased(key, env)) {
+    Released;
+  } else {
+    currentState;
+  };
+
+let getNextKeys = (keys, env) => {
+  {
+    left: getKeyState(Left, keys.left, env),
+    right: getKeyState(Right, keys.right, env),
+    space: getKeyState(Space, keys.space, env),
+  };
+};
+
 let draw = (state, env) => {
   Draw.background(Utils.color(~r=255, ~g=217, ~b=229, ~a=255), env);
 
@@ -84,8 +130,10 @@ let draw = (state, env) => {
     env,
   );
   // print_endline(mod_float(state.rotation, 360.0) |> string_of_float);
-  state;
-  {rotation: state.rotation +. 1.0};
+  // state;
+  let nextKeys = getNextKeys(state.keys, env);
+  let nextRotation = getNextRotation(state.rotation, nextKeys, env);
+  {rotation: nextRotation, keys: nextKeys};
 };
 
 run(~setup, ~draw, ());
