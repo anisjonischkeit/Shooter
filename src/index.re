@@ -38,7 +38,6 @@ let drawPlayer = (rotation, env) => {
   let xf = float_of_int(x);
   let yf = float_of_int(y);
   let widthf = float_of_int(width);
-  let centreX = xf +. widthf /. 2.0;
 
   /*
    tipWidth
@@ -89,7 +88,7 @@ let drawPlayer = (rotation, env) => {
   ();
 };
 
-let getNextRotation = (rotation, keys, env) => {
+let getNextRotation = (rotation, keys) => {
   let speed = 2.5;
   switch (keys.left, keys.right) {
   | (Pressed, Released) => rotation -. speed
@@ -132,7 +131,7 @@ let draw = (state, env) => {
   // print_endline(mod_float(state.rotation, 360.0) |> string_of_float);
   // state;
   let nextKeys = getNextKeys(state.keys, env);
-  let nextRotation = getNextRotation(state.rotation, nextKeys, env);
+  let nextRotation = getNextRotation(state.rotation, nextKeys);
   {rotation: nextRotation, keys: nextKeys};
 };
 
