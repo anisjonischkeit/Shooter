@@ -23,6 +23,7 @@ type bullets = list(bullet);
 
 type playerState = {
   rotation: float,
+  position: point,
   bullets,
 };
 
@@ -32,6 +33,9 @@ type state = {
 };
 
 let boardWidth = 600;
+let playerWidth = 30;
+let playerX = boardWidth / 2 - playerWidth;
+let playerY = boardWidth / 2 - playerWidth;
 
 let setup = env => {
   Env.size(~width=boardWidth, ~height=boardWidth, env);
@@ -40,6 +44,7 @@ let setup = env => {
     player: {
       rotation: 0.0,
       bullets: [],
+      position: (playerX, playerY),
     },
     keys: {
       left: Released,
@@ -50,13 +55,12 @@ let setup = env => {
 };
 
 let drawPlayer = (rotation, env) => {
-  let width = 30;
-  let x = boardWidth / 2 - width;
-  let y = boardWidth / 2 - width;
+  let screenX = boardWidth / 2 - playerWidth;
+  let screenY = boardWidth / 2 - playerWidth;
 
-  let xf = float_of_int(x);
-  let yf = float_of_int(y);
-  let widthf = float_of_int(width);
+  let screenXf = float_of_int(screenX);
+  let screenYf = float_of_int(screenY);
+  let widthf = float_of_int(playerWidth);
 
   /*
    tipWidth
@@ -66,11 +70,12 @@ let drawPlayer = (rotation, env) => {
    c^2 / 2 = a^2
    sqrt(c^2 / 2) = a
    */
-  let tipWidth = sqrt(width * width / 2 |> float_of_int) |> int_of_float;
+  let tipWidth =
+    sqrt(playerWidth * playerWidth / 2 |> float_of_int) |> int_of_float;
 
   // rotate the whole player
-  let playerRotationCentreX = xf +. widthf /. 2.0;
-  let playerRotationCentreY = yf +. widthf /. 4.0;
+  let playerRotationCentreX = screenXf +. widthf /. 2.0;
+  let playerRotationCentreY = screenYf +. widthf /. 4.0;
   Draw.pushMatrix(env);
 
   Draw.translate(~x=playerRotationCentreX, ~y=playerRotationCentreY, env);
@@ -79,7 +84,12 @@ let drawPlayer = (rotation, env) => {
 
   // create player
   Draw.fill(Utils.color(~r=41, ~g=166, ~b=244, ~a=255), env);
-  Draw.rect(~pos=(- width / 2, - width / 4), ~width, ~height=width, env);
+  Draw.rect(
+    ~pos=(- playerWidth / 2, - playerWidth / 4),
+    ~width=playerWidth,
+    ~height=playerWidth,
+    env,
+  );
 
   Draw.pushMatrix(env);
   Draw.translate(~x=0.0, ~y=-. widthf /. 4.0, env);
@@ -114,11 +124,11 @@ let getNextRotation = (rotation, keys) => {
   };
 };
 
-let getNextBullets = (bullets: bullets, keys): bullets => {
+let getNextBullets = (player, keys): bullets => {
   let nextBullets =
     // continue moving the bullets in the right direction
-    bullets
-    |> List.map(bullet =>
+    player.bullets
+    |> List.map((bullet: bullet) =>
          {
            ...bullet,
            position: bullet.nextPosition(bullet.startPos, bullet.position),
@@ -128,9 +138,9 @@ let getNextBullets = (bullets: bullets, keys): bullets => {
   switch (keys.space) {
   | Pressed => [
       {
-        position: (30, 20),
+        position: player.position,
         nextPosition: (_startPos, (currX, currY)) => (currX + 1, currY + 1),
-        startPos: (0, 0),
+        startPos: player.position,
       },
       ...nextBullets,
     ]
@@ -169,7 +179,7 @@ let drawBullets = (bullets, env) => {
   // TODO[PERF]: this could probably get composed with the other map if we
   // get performance issues with too many bullets
   bullets
-  |> List.iter(bullet =>
+  |> List.iter((bullet: bullet) =>
        Draw.ellipse(~center=bullet.position, ~radx=2, ~rady=2, env)
      );
 };
@@ -177,7 +187,7 @@ let drawBullets = (bullets, env) => {
 let draw = (previousState: state, env) => {
   let nextKeys = getNextKeys(previousState.keys, env);
   let nextRotation = getNextRotation(previousState.player.rotation, nextKeys);
-  let nextBullets = getNextBullets(previousState.player.bullets, nextKeys);
+  let nextBullets = getNextBullets(previousState.player, nextKeys);
 
   Draw.background(Utils.color(~r=255, ~g=217, ~b=229, ~a=255), env);
 
@@ -189,6 +199,7 @@ let draw = (previousState: state, env) => {
     player: {
       rotation: nextRotation,
       bullets: nextBullets,
+      position: previousState.player.position,
     },
     keys: nextKeys,
   };
