@@ -6,18 +6,11 @@
 #    that is where we will look for package.json/.nvmrc/etc not repo root!
 
 [build]
-  publish = "./build"
+  publish = "./dist"
   command = """
   npm install && \
   npm run build:web && \
-  rm -rf ./build && \
-  mkdir ./build && \
-  mkdir ./build/lib && \
-  mkdir build/lib/js && \
-  mkdir build/node_modules && \
-  cp index.html ./build/index.html && \
-  cp require_polyfill.js ./build/require_polyfill.js && \
-  cp -a ./lib/js/. ./build/lib/js/ && \
-  cp -a ./node_modules/. build/node_modules && \
-  echo `ls ./lib/js/`
+  npm run bundle
+  cp index.html ./dist/index.html && \
+  cp require_polyfill.js ./dist/require_polyfill.js && \
   """

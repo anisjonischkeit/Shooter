@@ -6,12 +6,15 @@
     "build": "bsb -make-world",
     "build:web": "bsb -make-world -backend js",
     "build:native": "bsb -make-world -backend native",
-    "clean": "bsb -clean-world"
+    "clean": "bsb -clean-world",
+    "bundle": "webpack lib/js/src/index.js"
   },
   "dependencies": {
     "reprocessing": "0.2.0"
   },
   "devDependencies": {
-    "bsb-native": "4.0.7000"
+    "bsb-native": "4.0.7000",
+    "webpack": "^4.30.0",
+    "webpack-cli": "^3.3.0"
   }
 }
