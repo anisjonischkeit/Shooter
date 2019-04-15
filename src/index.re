@@ -37,28 +37,33 @@ let drawPlayer = (rotation, env) => {
 
   Draw.translate(~x=playerRotationCentreX, ~y=playerRotationCentreY, env);
 
-  Draw.fill(Utils.color(~r=0, ~g=0, ~b=0, ~a=255), env);
-  Draw.rect(~pos=(0, 0), ~width=1, ~height=1, env);
-
   Draw.rotate(rotation, env);
-  // end rotate whole player
 
   // create player
   Draw.fill(Utils.color(~r=41, ~g=166, ~b=244, ~a=255), env);
-  Draw.rect(~pos=(- width / 2, - width / 2), ~width, ~height=width, env);
+  Draw.rect(~pos=(- width / 2, - width / 4), ~width, ~height=width, env);
 
   Draw.pushMatrix(env);
-  // Draw.translate(~x=centreX, ~y=yf, env);
+  Draw.translate(~x=0.0, ~y=-. widthf /. 4.0, env);
   Draw.rotate(Utils.radians(45.0), env);
 
-  // Draw.pixel(
-  //   ~pos=(0, 0),
-  //   ~color=Utils.color(~r=0, ~g=0, ~b=0, ~a=255),
-  //   env,
-  // );
+  Draw.rect(
+    ~pos=(- tipWidth / 2, - tipWidth / 2),
+    ~width=tipWidth,
+    ~height=tipWidth,
+    env,
+  );
 
-  Draw.rect(~pos=(0, 0), ~width=tipWidth, ~height=tipWidth, env);
+  // rotation centre for tip
+  Draw.fill(Utils.color(~r=0, ~g=0, ~b=0, ~a=255), env);
+  Draw.rect(~pos=(0, 0), ~width=1, ~height=1, env);
+
   Draw.popMatrix(env);
+
+  // rotation centre for player
+  Draw.fill(Utils.color(~r=255, ~g=255, ~b=0, ~a=255), env);
+  Draw.rect(~pos=(0, 0), ~width=1, ~height=1, env);
+
   Draw.popMatrix(env);
 
   ();
@@ -79,8 +84,8 @@ let draw = (state, env) => {
     env,
   );
   // print_endline(mod_float(state.rotation, 360.0) |> string_of_float);
+  state;
   {rotation: state.rotation +. 1.0};
-  // state;
 };
 
 run(~setup, ~draw, ());
