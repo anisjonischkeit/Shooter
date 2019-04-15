@@ -10,7 +10,7 @@ type keys = {
   space: keyState,
 };
 
-type point = (int, int);
+type point = (float, float);
 type startPos = point;
 
 type bullet = {
@@ -33,9 +33,12 @@ type state = {
 };
 
 let boardWidth = 600;
-let playerWidth = 30;
-let playerX = boardWidth / 2 - playerWidth;
-let playerY = boardWidth / 2 - playerWidth;
+let playerSquareWidth = 30;
+let playerDiameter = playerSquareWidth * 2;
+let playerX =
+  float_of_int(boardWidth) /. 2.0 -. float_of_int(playerSquareWidth);
+let playerY =
+  float_of_int(boardWidth) /. 2.0 -. float_of_int(playerSquareWidth);
 
 let setup = env => {
   Env.size(~width=boardWidth, ~height=boardWidth, env);
@@ -55,12 +58,12 @@ let setup = env => {
 };
 
 let drawPlayer = (rotation, env) => {
-  let screenX = boardWidth / 2 - playerWidth;
-  let screenY = boardWidth / 2 - playerWidth;
+  let screenX = boardWidth / 2 - playerSquareWidth;
+  let screenY = boardWidth / 2 - playerSquareWidth;
 
   let screenXf = float_of_int(screenX);
   let screenYf = float_of_int(screenY);
-  let widthf = float_of_int(playerWidth);
+  let widthf = float_of_int(playerSquareWidth);
 
   /*
    tipWidth
@@ -71,7 +74,8 @@ let drawPlayer = (rotation, env) => {
    sqrt(c^2 / 2) = a
    */
   let tipWidth =
-    sqrt(playerWidth * playerWidth / 2 |> float_of_int) |> int_of_float;
+    sqrt(playerSquareWidth * playerSquareWidth / 2 |> float_of_int)
+    |> int_of_float;
 
   // rotate the whole player
   let playerRotationCentreX = screenXf +. widthf /. 2.0;
@@ -85,9 +89,9 @@ let drawPlayer = (rotation, env) => {
   // create player
   Draw.fill(Utils.color(~r=41, ~g=166, ~b=244, ~a=255), env);
   Draw.rect(
-    ~pos=(- playerWidth / 2, - playerWidth / 4),
-    ~width=playerWidth,
-    ~height=playerWidth,
+    ~pos=(- playerSquareWidth / 2, - playerSquareWidth / 4),
+    ~width=playerSquareWidth,
+    ~height=playerSquareWidth,
     env,
   );
 
@@ -104,13 +108,13 @@ let drawPlayer = (rotation, env) => {
 
   // rotation centre for tip
   Draw.fill(Utils.color(~r=0, ~g=0, ~b=0, ~a=255), env);
-  Draw.rect(~pos=(0, 0), ~width=1, ~height=1, env);
+  Draw.rect(~pos=((-1), (-1)), ~width=2, ~height=2, env);
 
   Draw.popMatrix(env);
 
   // rotation centre for player
   Draw.fill(Utils.color(~r=255, ~g=255, ~b=0, ~a=255), env);
-  Draw.rect(~pos=(0, 0), ~width=1, ~height=1, env);
+  Draw.rect(~pos=((-1), (-1)), ~width=2, ~height=2, env);
 
   Draw.popMatrix(env);
 };
@@ -118,10 +122,76 @@ let drawPlayer = (rotation, env) => {
 let getNextRotation = (rotation, keys) => {
   let speed = 2.5;
   switch (keys.left, keys.right) {
-  | (Pressed, Released) => rotation -. speed
-  | (Released, Pressed) => rotation +. speed
+  | (Pressed, Released) => mod_float(rotation -. speed, 360.0)
+  | (Released, Pressed) => mod_float(rotation +. speed, 360.0)
   | _ => rotation
   };
+};
+
+/*
+   h = CONSTANT
+   q1x = sin(thet) = o/h
+   q1x = sin(thet) * h = a
+   q1x = sin(thet) * h
+
+   q1y = cos(thet) = a/h
+   q1y = cos(thet) * h = a
+   q1y = cos(thet) * h
+
+   thet=90 - (rotation-270)     |--             |   /                thet=rotation
+   q4x = -cos, q4y = -sin    Q4 |   ----t-      |t/               Q1 q1x = sin, q1y = -cos
+                                |---------------+---------------|
+   thet=90 - (rotation-180)  Q3               /t|         -t----| Q2 thet=rotation-90
+   q3x = -sin, q3y = cos                    /   |             --|    q2x = cos, q2y = sin
+
+   NOTE: where sin and cos should be used is based on the above image.
+   where - and + should be used is based on the coord system having (0,0)
+   as the top left and (∞, ∞) as the bottom right
+ */
+let getBulletOffsets = (rotation: float, travelDistance: float) => {
+  let h = travelDistance; // hypotenuse
+
+  if (rotation -. 270.0 >= 0.0) {
+    // q4
+    let theta = Utils.radians(rotation -. 270.0);
+    let x = -. cos(theta) *. h;
+    let y = -. sin(theta) *. h;
+    // print_endline("q4 " ++ string_of_float(theta));
+    (x, y);
+  } else if (rotation -. 180.0 >= 0.0) {
+    // q3
+
+    let theta = Utils.radians(rotation -. 180.0);
+    let x = -. sin(theta) *. h;
+    let y = cos(theta) *. h;
+    // print_endline("q3 " ++ string_of_float(theta));
+    (x, y);
+  } else if (rotation -. 90.0 >= 0.0) {
+    // q2
+
+    let theta = Utils.radians(rotation -. 90.0);
+    let x = cos(theta) *. h;
+    let y = sin(theta) *. h;
+    // print_endline("q2 " ++ string_of_float(theta));
+    (x, y);
+  } else {
+    // q1
+
+    let theta = Utils.radians(rotation);
+    let x = sin(theta) *. h;
+    let y = -. cos(theta) *. h;
+    // print_endline("q1 " ++ string_of_float(theta));
+    (x, y);
+  };
+};
+
+let getBulletStartPos = rotation => {
+  let (offsetX, offsetY) =
+    getBulletOffsets(rotation, playerDiameter / 2 |> float_of_int);
+
+  // TODO: these numbers were pretty much guessed and I feel like
+  // there's some dodgyness here that I'll be paying for later
+  (265.0 +. 20.0 +. offsetX, 255.0 +. 23.0 +. offsetY);
 };
 
 let getNextBullets = (player, keys): bullets => {
@@ -136,14 +206,21 @@ let getNextBullets = (player, keys): bullets => {
        );
 
   switch (keys.space) {
-  | Pressed => [
+  | Pressed =>
+    let startPos = getBulletStartPos(player.rotation);
+    let bulletSpeed = 3.0;
+    let (bulletOffsetX, bulletOffsetY) =
+      getBulletOffsets(player.rotation, bulletSpeed);
+    [
       {
-        position: player.position,
-        nextPosition: (_startPos, (currX, currY)) => (currX + 1, currY + 1),
-        startPos: player.position,
+        position: startPos,
+        nextPosition: (_startPos, (currX, currY)) => {
+          (currX +. bulletOffsetX, currY +. bulletOffsetY);
+        },
+        startPos,
       },
       ...nextBullets,
-    ]
+    ];
   | Released => nextBullets
   };
 };
@@ -166,11 +243,7 @@ let getNextKeys = (keys, env) => {
 };
 
 let drawRotation = (rotation, env) => {
-  Draw.text(
-    ~body=mod_float(rotation, 360.0) |> string_of_float,
-    ~pos=(0, 0),
-    env,
-  );
+  Draw.text(~body=rotation |> string_of_float, ~pos=(0, 0), env);
 };
 
 let drawBullets = (bullets, env) => {
@@ -178,9 +251,10 @@ let drawBullets = (bullets, env) => {
 
   // TODO[PERF]: this could probably get composed with the other map if we
   // get performance issues with too many bullets
+
   bullets
   |> List.iter((bullet: bullet) =>
-       Draw.ellipse(~center=bullet.position, ~radx=2, ~rady=2, env)
+       Draw.ellipsef(~center=bullet.position, ~radx=2.0, ~rady=2.0, env)
      );
 };
 
