@@ -33,6 +33,21 @@ type state = {
   keys,
 };
 
+let drawState = ({player: {rotation, position: (posX, posY)}}, env) => {
+  let playerStr =
+    "position: ("
+    ++ (posX |> string_of_float)
+    ++ ", "
+    ++ (posY |> string_of_float)
+    ++ ")";
+  Draw.text(~body=playerStr, ~pos=(0, 30), env);
+  Draw.text(
+    ~body="rotation: " ++ (rotation |> string_of_float),
+    ~pos=(0, 0),
+    env,
+  );
+};
+
 let boardWidth = 600;
 let playerSquareWidth = 30;
 let playerDiameter = playerSquareWidth * 2;
@@ -150,7 +165,7 @@ let getNextRotation = (rotation, keys) => {
    where - and + should be used is based on the coord system having (0,0)
    as the top left and (∞, ∞) as the bottom right
  */
-let getBulletOffsets = (rotation: float, travelDistance: float) => {
+let getOffsetsForRotation = (rotation: float, travelDistance: float) => {
   let h = travelDistance; // hypotenuse
 
   if (rotation -. 270.0 >= 0.0) {
@@ -189,7 +204,7 @@ let getBulletOffsets = (rotation: float, travelDistance: float) => {
 
 let getBulletStartPos = rotation => {
   let (offsetX, offsetY) =
-    getBulletOffsets(rotation, playerDiameter / 2 |> float_of_int);
+    getOffsetsForRotation(rotation, playerDiameter / 2 |> float_of_int);
 
   // TODO: these numbers were pretty much guessed and I feel like
   // there's some dodgyness here that I'll be paying for later
@@ -208,7 +223,7 @@ let getNextBulletPositions = (bullets): bullets => {
 };
 
 let getNewBullets = (player, keys, frameCount) => {
-  let shotInterval = 20; // can shoot once every n frames
+  let shotInterval = 8; // can shoot once every n frames
   let canShoot = frameCount - player.lastShotFrame >= shotInterval;
 
   switch (keys.space, canShoot) {
@@ -216,7 +231,7 @@ let getNewBullets = (player, keys, frameCount) => {
     let startPos = getBulletStartPos(player.rotation);
     let bulletSpeed = 3.0;
     let (bulletOffsetX, bulletOffsetY) =
-      getBulletOffsets(player.rotation, bulletSpeed);
+      getOffsetsForRotation(player.rotation, bulletSpeed);
     [
       {
         position: startPos,
@@ -247,8 +262,10 @@ let getNextKeys = (keys, env) => {
   };
 };
 
-let drawRotation = (rotation, env) => {
-  Draw.text(~body=rotation |> string_of_float, ~pos=(0, 0), env);
+let getNextPosition = (rotation, (positionX, positionY), movementSpeed) => {
+  let (offsetX, offsetY) = getOffsetsForRotation(rotation, movementSpeed);
+
+  (positionX +. offsetX, positionY +. offsetY);
 };
 
 let drawBullets = (bullets, env) => {
@@ -266,6 +283,13 @@ let drawBullets = (bullets, env) => {
 let draw = (previousState: state, env) => {
   let nextKeys = getNextKeys(previousState.keys, env);
   let nextRotation = getNextRotation(previousState.player.rotation, nextKeys);
+  let nextPosition =
+    getNextPosition(
+      previousState.player.rotation,
+      previousState.player.position,
+      0.1,
+    ); //lag this one frame behind (ie right is clicked, player turns imediately but only starts moving in the direction next frame)
+
   let nextBulletPositions =
     getNextBulletPositions(previousState.player.bullets);
   let newBullets =
@@ -275,14 +299,15 @@ let draw = (previousState: state, env) => {
   Draw.background(Utils.color(~r=255, ~g=217, ~b=229, ~a=255), env);
 
   drawPlayer(Utils.radians(nextRotation), env);
-  drawRotation(nextRotation, env);
   drawBullets(nextBullets, env);
+
+  drawState(previousState, env);
 
   {
     player: {
       rotation: nextRotation,
       bullets: nextBullets,
-      position: previousState.player.position,
+      position: nextPosition,
       lastShotFrame:
         newBullets |> List.length > 0
           ? Env.frameCount(env) : previousState.player.lastShotFrame,
