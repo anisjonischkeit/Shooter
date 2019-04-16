@@ -25,6 +25,7 @@ type playerState = {
   rotation: float,
   position: point,
   bullets,
+  lastShotFrame: int,
 };
 
 type state = {
@@ -48,6 +49,7 @@ let setup = env => {
       rotation: 0.0,
       bullets: [],
       position: (playerX, playerY),
+      lastShotFrame: 0,
     },
     keys: {
       left: Released,
@@ -194,19 +196,23 @@ let getBulletStartPos = rotation => {
   (265.0 +. 20.0 +. offsetX, 255.0 +. 23.0 +. offsetY);
 };
 
-let getNextBullets = (player, keys): bullets => {
-  let nextBullets =
-    // continue moving the bullets in the right direction
-    player.bullets
-    |> List.map((bullet: bullet) =>
-         {
-           ...bullet,
-           position: bullet.nextPosition(bullet.startPos, bullet.position),
-         }
-       );
+let getNextBulletPositions = (bullets): bullets => {
+  // continue moving the bullets in the right direction
+  bullets
+  |> List.map((bullet: bullet) =>
+       {
+         ...bullet,
+         position: bullet.nextPosition(bullet.startPos, bullet.position),
+       }
+     );
+};
 
-  switch (keys.space) {
-  | Pressed =>
+let getNewBullets = (player, keys, frameCount) => {
+  let shotInterval = 20; // can shoot once every n frames
+  let canShoot = frameCount - player.lastShotFrame >= shotInterval;
+
+  switch (keys.space, canShoot) {
+  | (Pressed, true) =>
     let startPos = getBulletStartPos(player.rotation);
     let bulletSpeed = 3.0;
     let (bulletOffsetX, bulletOffsetY) =
@@ -219,9 +225,8 @@ let getNextBullets = (player, keys): bullets => {
         },
         startPos,
       },
-      ...nextBullets,
     ];
-  | Released => nextBullets
+  | _ => []
   };
 };
 
@@ -261,7 +266,11 @@ let drawBullets = (bullets, env) => {
 let draw = (previousState: state, env) => {
   let nextKeys = getNextKeys(previousState.keys, env);
   let nextRotation = getNextRotation(previousState.player.rotation, nextKeys);
-  let nextBullets = getNextBullets(previousState.player, nextKeys);
+  let nextBulletPositions =
+    getNextBulletPositions(previousState.player.bullets);
+  let newBullets =
+    getNewBullets(previousState.player, nextKeys, Env.frameCount(env));
+  let nextBullets = newBullets |> List.append(nextBulletPositions);
 
   Draw.background(Utils.color(~r=255, ~g=217, ~b=229, ~a=255), env);
 
@@ -274,6 +283,9 @@ let draw = (previousState: state, env) => {
       rotation: nextRotation,
       bullets: nextBullets,
       position: previousState.player.position,
+      lastShotFrame:
+        newBullets |> List.length > 0
+          ? Env.frameCount(env) : previousState.player.lastShotFrame,
     },
     keys: nextKeys,
   };
