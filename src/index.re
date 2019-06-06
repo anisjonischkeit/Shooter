@@ -26,6 +26,7 @@ type playerState = {
   position: point,
   bullets,
   lastShotFrame: int,
+  color: (int, int, int),
 };
 
 type state = {
@@ -65,6 +66,7 @@ let setup = env => {
       bullets: [],
       position: (playerX, playerY),
       lastShotFrame: 0,
+      color: (0, 0, 0),
     },
     keys: {
       left: Released,
@@ -74,7 +76,7 @@ let setup = env => {
   };
 };
 
-let drawPlayer = (rotation, env) => {
+let drawPlayer = (rotation, (r, g, b), env) => {
   let screenX = boardWidth / 2 - playerSquareWidth;
   let screenY = boardWidth / 2 - playerSquareWidth;
 
@@ -104,7 +106,7 @@ let drawPlayer = (rotation, env) => {
   Draw.rotate(rotation, env);
 
   // create player
-  Draw.fill(Utils.color(~r=41, ~g=166, ~b=244, ~a=255), env);
+  Draw.fill(Utils.color(~r, ~g, ~b, ~a=255), env);
   Draw.rect(
     ~pos=(- playerSquareWidth / 2, - playerSquareWidth / 4),
     ~width=playerSquareWidth,
@@ -124,7 +126,7 @@ let drawPlayer = (rotation, env) => {
   );
 
   // rotation centre for tip
-  Draw.fill(Utils.color(~r=0, ~g=0, ~b=0, ~a=255), env);
+  Draw.fill(Utils.color(~r=125, ~g=125, ~b=125, ~a=255), env);
   Draw.rect(~pos=((-1), (-1)), ~width=2, ~height=2, env);
 
   Draw.popMatrix(env);
@@ -137,7 +139,7 @@ let drawPlayer = (rotation, env) => {
 };
 
 let getNextRotation = (rotation, keys) => {
-  let speed = 2.5;
+  let speed = 2.5 *. 4.;
   switch (keys.left, keys.right) {
   | (Pressed, Released) => mod_float(rotation -. speed, 360.0)
   | (Released, Pressed) => mod_float(rotation +. speed, 360.0)
@@ -202,13 +204,30 @@ let getOffsetsForRotation = (rotation: float, travelDistance: float) => {
   };
 };
 
-let getBulletStartPos = rotation => {
+let getBulletRelativeStartPos = rotation => {
   let (offsetX, offsetY) =
     getOffsetsForRotation(rotation, playerDiameter / 2 |> float_of_int);
 
   // TODO: these numbers were pretty much guessed and I feel like
   // there's some dodgyness here that I'll be paying for later
   (265.0 +. 20.0 +. offsetX, 255.0 +. 23.0 +. offsetY);
+};
+
+let relToAbsPos = ((playerX, playerY): point, (relX, relY): point): point => {
+  let halfBoardWidth = boardWidth / 2 |> float_of_int;
+  (playerX -. halfBoardWidth +. relX, playerY -. halfBoardWidth +. relY);
+};
+
+let absToRelPos = ((playerX, playerY): point, (absX, absY): point): point => {
+  /*
+     The inverse of relToAbsPos (let's do some maths):
+
+     absX = playerX -. halfBoardWidth +. relX
+     absX -. playerX +. halfBoardWidth = relX
+   */
+
+  let halfBoardWidth = boardWidth / 2 |> float_of_int;
+  (absX -. playerX +. halfBoardWidth, absY -. playerY +. halfBoardWidth);
 };
 
 let getNextBulletPositions = (bullets): bullets => {
@@ -228,15 +247,17 @@ let getNewBullets = (player, keys, frameCount) => {
 
   switch (keys.space, canShoot) {
   | (Pressed, true) =>
-    let startPos = getBulletStartPos(player.rotation);
+    let startPos =
+      getBulletRelativeStartPos(player.rotation)
+      |> relToAbsPos(player.position);
     let bulletSpeed = 3.0;
     let (bulletOffsetX, bulletOffsetY) =
       getOffsetsForRotation(player.rotation, bulletSpeed);
     [
       {
         position: startPos,
-        nextPosition: (_startPos, (currX, currY)) => {
-          (currX +. bulletOffsetX, currY +. bulletOffsetY);
+        nextPosition: (_startPos, (currBulletX, currBulletY)) => {
+          (currBulletX +. bulletOffsetX, currBulletY +. bulletOffsetY);
         },
         startPos,
       },
@@ -268,26 +289,32 @@ let getNextPosition = (rotation, (positionX, positionY), movementSpeed) => {
   (positionX +. offsetX, positionY +. offsetY);
 };
 
-let drawBullets = (bullets, env) => {
-  Draw.fill(Utils.color(~r=120, ~g=255, ~b=255, ~a=255), env);
+let drawBullets = (bullets, playerPos, (r, g, b), env) => {
+  Draw.fill(Utils.color(~r, ~g, ~b, ~a=255), env);
 
   // TODO[PERF]: this could probably get composed with the other map if we
   // get performance issues with too many bullets
 
   bullets
   |> List.iter((bullet: bullet) =>
-       Draw.ellipsef(~center=bullet.position, ~radx=2.0, ~rady=2.0, env)
+       Draw.ellipsef(
+         ~center=absToRelPos(playerPos, bullet.position),
+         ~radx=2.0,
+         ~rady=2.0,
+         env,
+       )
      );
 };
 
 let draw = (previousState: state, env) => {
+  let color = previousState.player.color;
   let nextKeys = getNextKeys(previousState.keys, env);
   let nextRotation = getNextRotation(previousState.player.rotation, nextKeys);
   let nextPosition =
     getNextPosition(
       previousState.player.rotation,
       previousState.player.position,
-      0.1,
+      0.1 *. 10.,
     ); //lag this one frame behind (ie right is clicked, player turns imediately but only starts moving in the direction next frame)
 
   let nextBulletPositions =
@@ -298,13 +325,14 @@ let draw = (previousState: state, env) => {
 
   Draw.background(Utils.color(~r=255, ~g=217, ~b=229, ~a=255), env);
 
-  drawPlayer(Utils.radians(nextRotation), env);
-  drawBullets(nextBullets, env);
+  drawPlayer(Utils.radians(nextRotation), color, env);
+  drawBullets(nextBullets, nextPosition, color, env);
 
   drawState(previousState, env);
 
   {
     player: {
+      color: previousState.player.color,
       rotation: nextRotation,
       bullets: nextBullets,
       position: nextPosition,
