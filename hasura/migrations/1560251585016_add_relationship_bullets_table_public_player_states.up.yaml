@@ -1,0 +1,12 @@
+- args:
+    name: bullets
+    table:
+      name: player_states
+      schema: public
+    using:
+      foreign_key_constraint_on:
+        column: player_id
+        table:
+          name: bullets
+          schema: public
+  type: create_array_relationship

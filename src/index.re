@@ -34,6 +34,92 @@ type state = {
   keys,
 };
 
+module GQLData = [%graphql
+  {|
+   subscription {
+     player_states {
+       id
+     }
+   }
+ |}
+];
+
+type decodePayload = {data: GQLData.t};
+
+type decodedData = {
+  type_: string,
+  id: string,
+  payload: decodePayload,
+};
+
+let wsQueue: Queue.t(decodedData) = Queue.create();
+
+let gqlQuery = GQLData.make();
+let gqlQueryStr = gqlQuery##query;
+
+let decodeRes = str => {
+  open Json.Decode;
+  let decoder = json => {
+    type_: json |> field("type", string),
+    id: json |> field("id", string),
+    payload:
+      json
+      |> field("payload", p => {data: p |> field("data", gqlQuery##parse)}),
+  };
+
+  try (Some(Json.parseOrRaise(str) |> decoder)) {
+  | DecodeError(_e) => None
+  };
+};
+
+let setupWebsocket = () => {
+  open BsWebSocket;
+
+  let ws =
+    make("ws://localhost:8080/v1alpha1/graphql", ~protocol="graphql-ws", ());
+
+  onOpen(
+    ws,
+    e => {
+      onClose(
+        ws,
+        e => {
+          Js.log2("Close", e);
+          Js.log2("code", CloseEvent.code(e));
+          Js.log2("reason", CloseEvent.reason(e));
+          Js.log2("wasClean", CloseEvent.wasClean(e));
+        },
+      );
+      onError(ws, Js.log2("error"));
+
+      Js.log2("Open", e);
+      send(
+        ws,
+        {|{"type":"connection_init","payload":{"headers":{"content-type":"application/json","x-hasura-admin-secret":"myadminsecretkey"}}}|},
+      );
+      send(
+        ws,
+        {j|{"id":"1","type":"start","payload":{"variables":{},"extensions":{},"operationName":null,"query": "$gqlQueryStr"}}|j},
+      );
+    },
+  );
+  onMessage(ws, e =>
+    switch (MessageEvent.data(e) |> decodeRes) {
+    | Some(data) => Queue.add(data, wsQueue)
+    | None => ()
+    }
+  );
+
+  Js.log2("url:", url(ws));
+  Js.log2("rs:", readyState(ws) == Connecting);
+};
+
+let reconcileState = state => {
+  /* not yet implemented */
+  Js.log(wsQueue |> Queue.length);
+  state;
+};
+
 let drawState = ({player: {rotation, position: (posX, posY)}}, env) => {
   let playerStr =
     "position: ("
@@ -58,6 +144,8 @@ let playerY =
   float_of_int(boardWidth) /. 2.0 -. float_of_int(playerSquareWidth);
 
 let setup = env => {
+  setupWebsocket();
+
   Env.size(~width=boardWidth, ~height=boardWidth, env);
 
   {
@@ -148,24 +236,24 @@ let getNextRotation = (rotation, keys) => {
 };
 
 /*
-   h = CONSTANT
-   q1x = sin(thet) = o/h
-   q1x = sin(thet) * h = a
-   q1x = sin(thet) * h
+ h = CONSTANT
+ q1x = sin(thet) = o/h
+ q1x = sin(thet) * h = a
+ q1x = sin(thet) * h
 
-   q1y = cos(thet) = a/h
-   q1y = cos(thet) * h = a
-   q1y = cos(thet) * h
+ q1y = cos(thet) = a/h
+ q1y = cos(thet) * h = a
+ q1y = cos(thet) * h
 
-   thet=90 - (rotation-270)     |--             |   /                thet=rotation
-   q4x = -cos, q4y = -sin    Q4 |   ----t-      |t/               Q1 q1x = sin, q1y = -cos
-                                |---------------+---------------|
-   thet=90 - (rotation-180)  Q3               /t|         -t----| Q2 thet=rotation-90
-   q3x = -sin, q3y = cos                    /   |             --|    q2x = cos, q2y = sin
+ thet=90 - (rotation-270)     |--             |   /                thet=rotation
+ q4x = -cos, q4y = -sin    Q4 |   ----t-      |t/               Q1 q1x = sin, q1y = -cos
+                                 |---------------+---------------|
+ thet=90 - (rotation-180)  Q3               /t|         -t----| Q2 thet=rotation-90
+ q3x = -sin, q3y = cos                    /   |             --|    q2x = cos, q2y = sin
 
-   NOTE: where sin and cos should be used is based on the above image.
-   where - and + should be used is based on the coord system having (0,0)
-   as the top left and (∞, ∞) as the bottom right
+ NOTE: where sin and cos should be used is based on the above image.
+ where - and + should be used is based on the coord system having (0,0)
+ as the top left and (∞, ∞) as the bottom right
  */
 let getOffsetsForRotation = (rotation: float, travelDistance: float) => {
   let h = travelDistance; // hypotenuse
@@ -220,10 +308,10 @@ let relToAbsPos = ((playerX, playerY): point, (relX, relY): point): point => {
 
 let absToRelPos = ((playerX, playerY): point, (absX, absY): point): point => {
   /*
-     The inverse of relToAbsPos (let's do some maths):
+       The inverse of relToAbsPos (let's do some maths):
 
-     absX = playerX -. halfBoardWidth +. relX
-     absX -. playerX +. halfBoardWidth = relX
+       absX = playerX -. halfBoardWidth +. relX
+       absX -. playerX +. halfBoardWidth = relX
    */
 
   let halfBoardWidth = boardWidth / 2 |> float_of_int;
@@ -307,20 +395,23 @@ let drawBullets = (bullets, playerPos, (r, g, b), env) => {
 };
 
 let draw = (previousState: state, env) => {
-  let color = previousState.player.color;
-  let nextKeys = getNextKeys(previousState.keys, env);
-  let nextRotation = getNextRotation(previousState.player.rotation, nextKeys);
+  let reconciledState = reconcileState(previousState);
+
+  let color = reconciledState.player.color;
+  let nextKeys = getNextKeys(reconciledState.keys, env);
+  let nextRotation =
+    getNextRotation(reconciledState.player.rotation, nextKeys);
   let nextPosition =
     getNextPosition(
-      previousState.player.rotation,
-      previousState.player.position,
+      reconciledState.player.rotation,
+      reconciledState.player.position,
       0.1 *. 10.,
     ); //lag this one frame behind (ie right is clicked, player turns imediately but only starts moving in the direction next frame)
 
   let nextBulletPositions =
-    getNextBulletPositions(previousState.player.bullets);
+    getNextBulletPositions(reconciledState.player.bullets);
   let newBullets =
-    getNewBullets(previousState.player, nextKeys, Env.frameCount(env));
+    getNewBullets(reconciledState.player, nextKeys, Env.frameCount(env));
   let nextBullets = newBullets |> List.append(nextBulletPositions);
 
   Draw.background(Utils.color(~r=255, ~g=217, ~b=229, ~a=255), env);
@@ -328,17 +419,17 @@ let draw = (previousState: state, env) => {
   drawPlayer(Utils.radians(nextRotation), color, env);
   drawBullets(nextBullets, nextPosition, color, env);
 
-  drawState(previousState, env);
+  drawState(reconciledState, env);
 
   {
     player: {
-      color: previousState.player.color,
+      color: reconciledState.player.color,
       rotation: nextRotation,
       bullets: nextBullets,
       position: nextPosition,
       lastShotFrame:
         newBullets |> List.length > 0
-          ? Env.frameCount(env) : previousState.player.lastShotFrame,
+          ? Env.frameCount(env) : reconciledState.player.lastShotFrame,
     },
     keys: nextKeys,
   };

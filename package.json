@@ -10,6 +10,9 @@
     "bundle": "webpack lib/js/src/index.js"
   },
   "dependencies": {
+    "@glennsl/bs-json": "^4.0.0",
+    "@ryb73/bs-websockets": "git+https://github.com/ryb73/bs-websockets.git",
+    "graphql_ppx": "^0.2.8",
     "reprocessing": "0.2.0"
   },
   "devDependencies": {

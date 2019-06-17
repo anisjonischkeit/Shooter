@@ -1,0 +1,6 @@
+- args:
+    relationship: bullets
+    table:
+      name: player_states
+      schema: public
+  type: drop_relationship

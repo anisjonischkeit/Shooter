@@ -1,0 +1,26 @@
+version: "3.6"
+services:
+  graphql-engine:
+    image: hasura/graphql-engine:v1.0.0-alpha44
+    ports:
+      - "8080:8080"
+    restart: always
+    depends_on:
+      - shooter-postgres
+    environment:
+      ## See https://docs.hasura.io/1.0/graphql/manual/deployment/docker/index.html for docker network config
+      HASURA_GRAPHQL_DATABASE_URL: postgres://shooter-postgres/${POSTGRES_DB}?user=postgres&password=&sslmode=disable
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "false" # use `hasura console --admin-secret myadminsecretkey` instead. This way migrations are tracked.
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET}
+      # failed to build schema-cache because of inconsistent metadata fix:
+      # https://github.com/hasura/graphql-engine/issues/1839
+
+  shooter-postgres:
+    image: postgres:10.5
+    ports:
+      - "54321:5432"
+
+    # volumes:
+    #   - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}

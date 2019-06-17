@@ -1,0 +1,14 @@
+- args:
+    sql: CREATE EXTENSION IF NOT EXISTS pgcrypto;
+  type: run_sql
+- args:
+    sql: CREATE TABLE "public"."bullets"("player_id" integer NOT NULL, "currentX"
+      numeric NOT NULL, "currentY" numeric NOT NULL, "flightPath" integer NOT NULL,
+      "startX" numeric NOT NULL, "startY" numeric NOT NULL, "id" uuid NOT NULL DEFAULT
+      gen_random_uuid(), PRIMARY KEY ("id") , FOREIGN KEY ("player_id") REFERENCES
+      "public"."player_states"("id") ON UPDATE cascade ON DELETE cascade);
+  type: run_sql
+- args:
+    name: bullets
+    schema: public
+  type: add_existing_table_or_view

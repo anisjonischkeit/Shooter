@@ -1,16 +1,25 @@
 {
   "name": "reprocessing-example",
   "sources": "src",
-  "bs-dependencies": ["reprocessing"],
-  "entries": [{
-    "backend": "bytecode",
-    "main-module": "IndexHot"
-  },{
-    "backend": "native",
-    "main-module": "Index"
-  },{
-    "backend": "js",
-    "main-module": "Index"
-  }],
-  "refmt": 3,
+  "bs-dependencies": [
+    "reprocessing",
+    "@ryb73/bs-websockets",
+    "@glennsl/bs-json"
+  ],
+  "entries": [
+    {
+      "backend": "bytecode",
+      "main-module": "IndexHot"
+    },
+    {
+      "backend": "native",
+      "main-module": "Index"
+    },
+    {
+      "backend": "js",
+      "main-module": "Index"
+    }
+  ],
+  "ppx-flags": ["graphql_ppx/ppx"],
+  "refmt": 3
 }
