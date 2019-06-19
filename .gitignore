@@ -4,3 +4,4 @@ node_modules
 .bsb.lock
 build
 dist
+.graphql_ppx_cache

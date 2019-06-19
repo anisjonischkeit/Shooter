@@ -1,6 +1,7 @@
 - args:
-    sql: CREATE TABLE "public"."player_states"("id" integer NOT NULL, "positionX"
-      numeric NOT NULL, "positionY" numeric NOT NULL, PRIMARY KEY ("id") );
+    sql:
+      CREATE TABLE "public"."player_states"("id" integer NOT NULL, "positionX"
+      real NOT NULL, "positionY" real NOT NULL, PRIMARY KEY ("id") );
   type: run_sql
 - args:
     name: player_states

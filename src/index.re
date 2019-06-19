@@ -34,7 +34,13 @@ type state = {
   keys,
 };
 
-module GQLData = [%graphql
+[@bs.deriving jsConverter]
+type wsMessageType =
+  | PlayerStateSubscription
+  | CreatePlayer
+  | UpdatePlayerState;
+
+module GQLSubscriptionData = [%graphql
   {|
    subscription {
      player_states {
@@ -43,28 +49,49 @@ module GQLData = [%graphql
    }
  |}
 ];
+let gqlSubscription = GQLSubscriptionData.make();
+let gqlSubscriptionStr = gqlSubscription##query;
 
-type decodePayload = {data: GQLData.t};
+module GQLCreatePlayer = [%graphql
+  {|
+    mutation($id: Int, $positionX: Float, $positionY: Float) {
+      insert_player_states(objects: {id: $id, positionX: $positionX, positionY: $positionY}) {
+        affected_rows
+      }
+    }
+ |}
+];
+
+type decodePayload = {data: GQLSubscriptionData.t};
 
 type decodedData = {
   type_: string,
-  id: string,
+  id: option(wsMessageType),
   payload: decodePayload,
 };
 
-let wsQueue: Queue.t(decodedData) = Queue.create();
+let wsQueue: Queue.t(decodePayload) = Queue.create();
 
-let gqlQuery = GQLData.make();
-let gqlQueryStr = gqlQuery##query;
+let int_of_string_opt = str =>
+  try (Some(int_of_string(str))) {
+  | _ => None
+  };
 
 let decodeRes = str => {
   open Json.Decode;
+  let decodeId = (idStr: Js.Json.t) => {
+    int_of_string_opt(idStr |> string)
+    ->Belt.Option.flatMap(wsMessageTypeFromJs);
+  };
+
   let decoder = json => {
     type_: json |> field("type", string),
-    id: json |> field("id", string),
+    id: json |> field("id", decodeId),
     payload:
       json
-      |> field("payload", p => {data: p |> field("data", gqlQuery##parse)}),
+      |> field("payload", p =>
+           {data: p |> field("data", gqlSubscription##parse)}
+         ),
   };
 
   try (Some(Json.parseOrRaise(str) |> decoder)) {
@@ -72,7 +99,9 @@ let decodeRes = str => {
   };
 };
 
-let setupWebsocket = () => {
+let setupWebsocket = playerId => {
+  /* ws docs here : https://github.com/apollographql/subscriptions-transport-ws/blob/master/PROTOCOL.md */
+
   open BsWebSocket;
 
   let ws =
@@ -97,15 +126,36 @@ let setupWebsocket = () => {
         ws,
         {|{"type":"connection_init","payload":{"headers":{"content-type":"application/json","x-hasura-admin-secret":"myadminsecretkey"}}}|},
       );
+
+      let playerStateSubscriptionStr =
+        PlayerStateSubscription |> wsMessageTypeToJs;
       send(
         ws,
-        {j|{"id":"1","type":"start","payload":{"variables":{},"extensions":{},"operationName":null,"query": "$gqlQueryStr"}}|j},
+        {j|{"id": "$playerStateSubscriptionStr","type":"start","payload":{"variables":{},"extensions":{},"operationName":null,"query": "$gqlSubscriptionStr"}}|j},
+      );
+
+      let gqlCreatePlayer =
+        GQLCreatePlayer.make(
+          ~id=playerId,
+          ~positionX=0.0,
+          ~positionY=0.0,
+          (),
+        );
+      let gqlCreatePlayerQuery = gqlCreatePlayer##query;
+      let gqlCreatePlayerVariables =
+        gqlCreatePlayer##variables |> Js.Json.stringify;
+      let createPlayerIdStr = CreatePlayer |> wsMessageTypeToJs;
+
+      send(
+        ws,
+        {j|{"id":"$createPlayerIdStr","type":"start","payload":{"variables":$(gqlCreatePlayerVariables),"extensions":{},"operationName":null,"query": "$(gqlCreatePlayerQuery)"}}|j},
       );
     },
   );
   onMessage(ws, e =>
     switch (MessageEvent.data(e) |> decodeRes) {
-    | Some(data) => Queue.add(data, wsQueue)
+    | Some({id: Some(PlayerStateSubscription), payload}) =>
+      Queue.add(payload, wsQueue)
     | None => ()
     }
   );
@@ -143,8 +193,18 @@ let playerX =
 let playerY =
   float_of_int(boardWidth) /. 2.0 -. float_of_int(playerSquareWidth);
 
+let generateColor = () => {
+  let gen = () => Js_math.random_int(0, 25) * 10;
+  (gen(), gen(), gen());
+};
+let generateId = ((r, g, b)) => {
+  r * 1000000 + g * 1000 + b;
+};
+
 let setup = env => {
-  setupWebsocket();
+  let playerColor = generateColor();
+  let playerId = generateId(playerColor);
+  setupWebsocket(playerId);
 
   Env.size(~width=boardWidth, ~height=boardWidth, env);
 
@@ -154,7 +214,7 @@ let setup = env => {
       bullets: [],
       position: (playerX, playerY),
       lastShotFrame: 0,
-      color: (0, 0, 0),
+      color: playerColor,
     },
     keys: {
       left: Released,
